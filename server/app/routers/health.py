@@ -17,10 +17,10 @@ async def health_check() -> Dict[str, Any]:
     
     Returns system status and service availability.
     """
-    from app.services.data_loader import get_product_database
-    from app.services.gemini_service import get_gemini_service
-    from app.services.freshdesk import get_freshdesk_service
-    from app.core.orchestrator import get_orchestrator
+    from ..services.data_loader import get_product_database
+    from ..services.gemini_service import get_gemini_service
+    from ..services.freshdesk import get_freshdesk_service
+    from ..core.orchestrator import get_orchestrator
     
     try:
         product_db = get_product_database()
@@ -64,8 +64,8 @@ async def get_stats() -> Dict[str, Any]:
     """
     Get detailed system statistics.
     """
-    from app.services.data_loader import get_product_database
-    from app.core.orchestrator import get_orchestrator
+    from ..services.data_loader import get_product_database
+    from ..core.orchestrator import get_orchestrator
     
     try:
         product_db = get_product_database()

@@ -61,7 +61,7 @@ async def process_chat(request: ChatRequest) -> ChatResponse:
     Returns:
         ChatResponse with comprehensive answer and media assets
     """
-    from app.core.orchestrator import get_orchestrator
+    from ..core.orchestrator import get_orchestrator
     
     try:
         orchestrator = get_orchestrator()
@@ -93,7 +93,7 @@ async def export_to_freshdesk(request: FreshdeskRequest) -> FreshdeskResponse:
     Returns:
         FreshdeskResponse with success status
     """
-    from app.services.freshdesk import get_freshdesk_service
+    from ..services.freshdesk import get_freshdesk_service
     from datetime import datetime
     
     try:
@@ -146,7 +146,7 @@ async def list_products(
     Returns:
         List of products
     """
-    from app.services.data_loader import get_product_database
+    from ..services.data_loader import get_product_database
     
     try:
         product_db = get_product_database()
@@ -182,7 +182,7 @@ async def get_product_details(model_number: str) -> Dict[str, Any]:
     Returns:
         Product details with specs and media
     """
-    from app.services.data_loader import get_product_database
+    from ..services.data_loader import get_product_database
     
     try:
         product_db = get_product_database()

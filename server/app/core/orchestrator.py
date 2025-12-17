@@ -11,9 +11,9 @@ Implements the linear processing pipeline:
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from app.services.data_loader import ProductDatabase, ProductContext
-from app.services.gemini_service import GeminiService
-from app.core.prompts import PromptsManager
+from ..services.data_loader import ProductDatabase, ProductContext
+from ..services.gemini_service import GeminiService
+from .prompts import PromptsManager
 
 
 class Orchestrator:

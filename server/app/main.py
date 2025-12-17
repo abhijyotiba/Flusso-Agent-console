@@ -14,9 +14,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-# Load environment variables from .env file in parent directory
+# Load environment variables from .env file in parent directory (for local dev)
 env_path = Path(__file__).parent.parent.parent / '.env'
-load_dotenv(dotenv_path=env_path)
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    print(f"Loaded environment from {env_path}")
+else:
+    # On Render, env vars are already set - no .env file needed
+    print("No .env file found - using system environment variables")
 
 # Import services using relative imports
 from . import services
@@ -130,10 +135,12 @@ app = FastAPI(
 
 # Configure CORS
 # Configure CORS - allow origins come from environment for safety
-allowed_origins = os.getenv(
+allowed_origins_str = os.getenv(
     "ALLOWED_ORIGINS",
     "http://localhost:3000,http://localhost:8000,http://127.0.0.1:3000,http://127.0.0.1:8000"
-).split(",")
+)
+# Handle both comma-separated and single values, strip whitespace
+allowed_origins = [origin.strip() for origin in allowed_origins_str.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
