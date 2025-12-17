@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Backend Service
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: agent_assist_backend
+    ports:
+      - "8000:8000"
+    environment:
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - FILE_SEARCH_CORPUS_ID=${FILE_SEARCH_CORPUS_ID}
+      - FRESHDESK_DOMAIN=${FRESHDESK_DOMAIN}
+      - FRESHDESK_API_KEY=${FRESHDESK_API_KEY}
+      - DATA_DIR=/app/data
+    volumes:
+      - ./server/data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+  
+  # Frontend Service (Nginx)
+  frontend:
+    image: nginx:alpine
+    container_name: agent_assist_frontend
+    ports:
+      - "3000:80"
+    volumes:
+      - ./client:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  default:
+    name: agent_assist_network
