@@ -1,0 +1,11 @@
+﻿substitutions:
+  _IMAGE: "gcr.io/$PROJECT_ID/agent-assist:${SHORT_SHA}"
+
+steps:
+  - name: "gcr.io/cloud-builders/docker"
+    args: ["build", "-f", "Dockerfile", "-t", "${_IMAGE}", "."]
+
+images:
+  - "${_IMAGE}"
+
+timeout: "1200s"
