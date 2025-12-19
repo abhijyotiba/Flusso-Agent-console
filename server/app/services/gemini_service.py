@@ -95,6 +95,8 @@ class GeminiService:
             
         except Exception as e:
             print(f"✗ Error generating response: {e}")
+            import traceback
+            traceback.print_exc()
             raise
     
     async def file_search(
@@ -178,30 +180,57 @@ class GeminiService:
                     if key not in ['Model_NO', 'Product_Name']:
                         prompt_parts.append(f"- {key}: {value}")
             
+            # FIX: Defensive check for media being a dict
             if "media" in structured and structured["media"]:
                 media = structured["media"]
                 
-                if media.get("videos"):
-                    prompt_parts.append("\n## Available Videos:")
-                    for video in media["videos"]:
-                        prompt_parts.append(f"- {video.get('title')}: {video.get('url')}")
+                # Ensure media is a dictionary
+                if not isinstance(media, dict):
+                    print(f"⚠ Warning: media is not a dict, it's a {type(media)}. Value: {media}")
+                    media = {"videos": [], "images": []}
                 
-                if media.get("images"):
+                # Safely access videos
+                videos = media.get("videos", []) if isinstance(media, dict) else []
+                if videos and isinstance(videos, list):
+                    prompt_parts.append("\n## Available Videos:")
+                    for video in videos:
+                        if isinstance(video, dict):
+                            title = video.get('title', 'Video')
+                            url = video.get('url', '')
+                            prompt_parts.append(f"- {title}: {url}")
+                        elif isinstance(video, str):
+                            prompt_parts.append(f"- Video: {video}")
+                
+                # Safely access images
+                images = media.get("images", []) if isinstance(media, dict) else []
+                if images and isinstance(images, list):
                     prompt_parts.append("\n## Available Images:")
-                    for image in media["images"]:
-                        prompt_parts.append(f"- {image.get('title')}: {image.get('url')}")
+                    for image in images:
+                        if isinstance(image, dict):
+                            title = image.get('title', 'Image')
+                            url = image.get('url', '')
+                            prompt_parts.append(f"- {title}: {url}")
+                        elif isinstance(image, str):
+                            prompt_parts.append(f"- Image: {image}")
             
             if "documents" in structured and structured["documents"]:
-                prompt_parts.append("\n## Available Documents:")
-                for doc in structured["documents"]:
-                    prompt_parts.append(f"- {doc.get('title')} ({doc.get('type')}): {doc.get('url')}")
+                documents = structured["documents"]
+                if isinstance(documents, list):
+                    prompt_parts.append("\n## Available Documents:")
+                    for doc in documents:
+                        if isinstance(doc, dict):
+                            title = doc.get('title', 'Document')
+                            doc_type = doc.get('type', 'Document')
+                            url = doc.get('url', '')
+                            prompt_parts.append(f"- {title} ({doc_type}): {url}")
         
         # Add unstructured data (file search results)
         if "unstructured" in context and context["unstructured"]:
             prompt_parts.append("\n## Relevant Documentation Excerpts:")
             for idx, result in enumerate(context["unstructured"], 1):
-                prompt_parts.append(f"\n### Excerpt {idx} (from {result.get('title', 'Unknown')})")
-                prompt_parts.append(result.get('text', ''))
+                if isinstance(result, dict):
+                    prompt_parts.append(f"\n### Excerpt {idx} (from {result.get('title', 'Unknown')})")
+                    prompt_parts.append(result.get('text', ''))
         
         return "\n".join(prompt_parts)
     
@@ -212,20 +241,24 @@ class GeminiService:
         # From file search results
         if "unstructured" in context:
             for result in context["unstructured"]:
-                title = result.get('title', 'Documentation')
-                page = result.get('page', '')
-                source = f"{title}"
-                if page:
-                    source += f" (Page {page})"
-                if source not in sources:
-                    sources.append(source)
+                if isinstance(result, dict):
+                    title = result.get('title', 'Documentation')
+                    page = result.get('page', '')
+                    source = f"{title}"
+                    if page:
+                        source += f" (Page {page})"
+                    if source not in sources:
+                        sources.append(source)
         
         # From documents
         if "structured" in context and "documents" in context["structured"]:
-            for doc in context["structured"]["documents"]:
-                title = doc.get('title', '')
-                if title and title not in sources:
-                    sources.append(title)
+            documents = context["structured"]["documents"]
+            if isinstance(documents, list):
+                for doc in documents:
+                    if isinstance(doc, dict):
+                        title = doc.get('title', '')
+                        if title and title not in sources:
+                            sources.append(title)
         
         return sources
 
