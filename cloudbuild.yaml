@@ -29,7 +29,7 @@ steps:
       - "--image"
       - "${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}"
       - "--region"
-      - "europe-west1"
+      - "us-west2"
 
 # Required because you are using a custom service account
 options:
