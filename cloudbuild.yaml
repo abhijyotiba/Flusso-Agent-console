@@ -1,11 +1,10 @@
 ﻿substitutions:
-  # These match your new Artifact Registry setup
   _IMAGE_NAME: "flusso-agent-console"
   _AR_LOCATION: "us-west2"
   _AR_REPOSITORY: "flusso-images"
 
 steps:
-  # 1. Build the Docker image using the Dockerfile in your repo
+  # 1. Build the Docker image (ensure your Dockerfile uses python:3.12-slim or higher)
   - name: "gcr.io/cloud-builders/docker"
     args: 
       - "build"
@@ -13,13 +12,13 @@ steps:
       - "${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}"
       - "."
 
-  # 2. Push the image to your new Artifact Registry repo
+  # 2. Push the image to Artifact Registry
   - name: "gcr.io/cloud-builders/docker"
     args: 
       - "push" 
       - "${_AR_LOCATION}-docker.pkg.dev/$PROJECT_ID/${_AR_REPOSITORY}/${_IMAGE_NAME}:${SHORT_SHA}"
 
-  # 3. Deploy the image to Cloud Run in us-west2
+  # 3. Deploy to Cloud Run with Secrets and Env Vars
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: gcloud
     args:
@@ -31,8 +30,13 @@ steps:
       - "--region"
       - "us-west2"
       - "--allow-unauthenticated"
+      # SECRETS: These fetch the latest values from Secret Manager
+      - "--set-secrets"
+      - "GOOGLE_API_KEY=GOOGLE_API_KEY:latest,FRESHDESK_API_KEY=FRESHDESK_API_KEY:latest,FILE_SEARCH_CORPUS_ID=FILE_SEARCH_CORPUS_ID:latest"
+      # ENV VARS: Non-sensitive configuration variables
+      - "--set-env-vars"
+      - "FRESHDESK_DOMAIN=somaiya-help.freshdesk.com,DATA_DIR=data,ALLOWED_ORIGINS=http://localhost:3000"
 
-# Critical for custom service accounts to avoid trigger errors
 options:
   logging: CLOUD_LOGGING_ONLY
 
