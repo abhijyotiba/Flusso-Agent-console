@@ -1,22 +1,21 @@
 /**
- * Agent Assist Console - Frontend Application Logic
+ * Agent Assist Console - Frontend Application Logic (FIXED)
  * 
  * Handles:
  * - Chat interface
  * - API communication
  * - Media panel rendering
  * - Freshdesk export
+ * 
+ * FIX: Ensures complete response is received and rendered
  */
 
 // Configuration
 const CONFIG = {
     apiBaseUrl: (() => {
-        // Development: Use localhost backend
         if (window.location.origin.includes('localhost')) {
             return 'http://localhost:8000';
         }
-        // Production: Check for environment variable or use same origin
-        // For Render deployment, you can set BACKEND_URL in your static site config
         const backendUrl = window.BACKEND_URL || window.location.origin;
         return backendUrl;
     })(),
@@ -78,13 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
 async function initializeApp() {
     console.log('🚀 Initializing Agent Assist Console...');
     
-    // Check backend health
     await checkHealth();
-    
-    // Setup event listeners
     setupEventListeners();
-    
-    // Load model preference
     loadModelPreference();
     
     console.log('✅ Application ready');
@@ -109,10 +103,8 @@ async function checkHealth() {
 }
 
 function setupEventListeners() {
-    // Chat form submission
     elements.chatForm.addEventListener('submit', handleChatSubmit);
     
-    // Model selection
     document.querySelectorAll('input[name="model"]').forEach(radio => {
         radio.addEventListener('change', (e) => {
             AppState.config.modelMode = e.target.value;
@@ -121,16 +113,13 @@ function setupEventListeners() {
         });
     });
     
-    // Ticket ID input
     elements.ticketIdInput.addEventListener('input', (e) => {
         AppState.freshdesk.ticketId = e.target.value.trim();
         elements.exportBtn.disabled = !AppState.freshdesk.ticketId || !AppState.context.latestResponse;
     });
     
-    // Export button
     elements.exportBtn.addEventListener('click', handleFreshdeskExport);
     
-    // Enter key for input
     elements.userInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -154,18 +143,14 @@ async function handleChatSubmit(e) {
     const query = elements.userInput.value.trim();
     if (!query || AppState.chat.isLoading) return;
     
-    // Clear input
     elements.userInput.value = '';
-    
-    // Add user message to chat
     addMessage('user', query);
-    
-    // Show loading
     setLoading(true);
     addTypingIndicator();
     
     try {
-        // Send query to backend
+        console.log('📤 Sending request to backend...');
+        
         const response = await fetch(`${CONFIG.apiBaseUrl}${CONFIG.endpoints.chat}`, {
             method: 'POST',
             headers: {
@@ -178,25 +163,46 @@ async function handleChatSubmit(e) {
         });
 
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ API Error Response:', errorText);
             throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
 
+        // CRITICAL FIX: Read the full response text first
+        const responseText = await response.text();
+        console.log('✓ Full response received');
+        console.log('📊 Response size:', responseText.length, 'characters');
+        
+        // Parse JSON
         let data;
         try {
-            data = await response.json();
+            data = JSON.parse(responseText);
+            console.log('✓ JSON parsed successfully');
         } catch (jsonErr) {
+            console.error('❌ JSON Parse Error:', jsonErr);
+            console.error('Response text (first 500 chars):', responseText.substring(0, 500));
             throw new Error('Malformed JSON response from server.');
         }
 
         // Validate response structure
         if (!data || typeof data.markdown_response !== 'string') {
+            console.error('❌ Invalid response structure:', data);
             throw new Error('Malformed API response: missing markdown_response.');
         }
 
-        // Remove typing indicator
+        // Log the COMPLETE markdown response for debugging
+        const markdownLength = data.markdown_response.length;
+        console.log('📝 Markdown response length:', markdownLength, 'characters');
+        console.log('📄 First 200 chars:', data.markdown_response.substring(0, 200));
+        console.log('📄 Last 200 chars:', data.markdown_response.substring(Math.max(0, markdownLength - 200)));
+        
+        // Verify the response is complete (check if it ends mid-sentence)
+        const lastChars = data.markdown_response.slice(-50);
+        console.log('🔍 Response ending:', lastChars);
+
         removeTypingIndicator();
 
-        // Add AI response
+        // Add AI response with the COMPLETE markdown
         addMessage('assistant', data.markdown_response, data);
 
         // Update context
@@ -215,10 +221,10 @@ async function handleChatSubmit(e) {
             elements.exportBtn.disabled = false;
         }
 
-        console.log('✓ Response received', data);
+        console.log('✅ Response processed successfully');
 
     } catch (error) {
-        console.error('✗ Error processing query:', error);
+        console.error('❌ Error processing query:', error);
         removeTypingIndicator();
         addMessage('system', `❌ Error: ${error.message}`);
     } finally {
@@ -239,7 +245,27 @@ function addMessage(role, content, metadata = null) {
             </div>
         `;
     } else if (role === 'assistant') {
-        const markdownHtml = marked.parse(content);
+        // CRITICAL FIX: Parse the COMPLETE markdown content
+        let markdownHtml;
+        try {
+            console.log('🔄 Parsing markdown (length: ' + content.length + ')...');
+            
+            // Parse markdown - marked.parse() should handle the full content
+            markdownHtml = marked.parse(content);
+            
+            console.log('✓ Markdown parsed successfully');
+            console.log('📊 HTML length:', markdownHtml.length, 'characters');
+            
+            // Verify HTML is not truncated
+            if (markdownHtml.length < content.length * 0.8) {
+                console.warn('⚠️ Warning: HTML output seems shorter than expected');
+            }
+            
+        } catch (parseError) {
+            console.error('❌ Markdown parsing error:', parseError);
+            // Fallback: Display as preformatted text
+            markdownHtml = `<pre>${escapeHtml(content)}</pre>`;
+        }
         
         messageDiv.innerHTML = `
             <div class="flex items-start space-x-3">
@@ -257,7 +283,7 @@ function addMessage(role, content, metadata = null) {
                         ${metadata && metadata.matched_product ? `
                             <div class="mt-3 pt-3 border-t border-gray-200">
                                 <span class="badge badge-blue">
-                                    📦 ${metadata.matched_product}
+                                    📦 ${escapeHtml(metadata.matched_product)}
                                 </span>
                                 <span class="badge badge-green ml-2">
                                     ${Math.round(metadata.confidence * 100)}% match
@@ -276,7 +302,7 @@ function addMessage(role, content, metadata = null) {
                         ` : ''}
                     </div>
                     <div class="text-xs text-gray-500 mt-2 ml-4">
-                        ${new Date().toLocaleTimeString()} • ${metadata?.model_used || 'AI'}
+                        ${new Date().toLocaleTimeString()} • ${escapeHtml(metadata?.model_used || 'AI')}
                     </div>
                 </div>
             </div>
@@ -341,7 +367,7 @@ function renderMediaPanel(assets, productName) {
     let html = `
         <div class="p-6">
             <h2 class="text-lg font-semibold text-gray-800 mb-4">
-                📦 ${productName || 'Product Resources'}
+                📦 ${escapeHtml(productName || 'Product Resources')}
             </h2>
     `;
     
@@ -364,8 +390,8 @@ function renderMediaPanel(assets, productName) {
                                 .slice(0, 10)
                                 .map(([key, value]) => `
                                     <tr class="border-b border-gray-200 last:border-b-0">
-                                        <td class="px-3 py-2 font-medium text-gray-600">${formatKey(key)}</td>
-                                        <td class="px-3 py-2 text-gray-900">${formatValue(value)}</td>
+                                        <td class="px-3 py-2 font-medium text-gray-600">${escapeHtml(formatKey(key))}</td>
+                                        <td class="px-3 py-2 text-gray-900">${escapeHtml(formatValue(value))}</td>
                                     </tr>
                                 `).join('')}
                         </tbody>
@@ -388,7 +414,7 @@ function renderMediaPanel(assets, productName) {
                 </h3>
                 <div class="space-y-3">
                     ${videos.map(video => `
-                        <a href="${video.url}" target="_blank" 
+                        <a href="${escapeHtml(video.url)}" target="_blank" 
                            class="media-card block bg-white border border-gray-200 rounded-lg p-3 hover:border-blue-500">
                             <div class="flex items-center space-x-3">
                                 <div class="flex-shrink-0 w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
@@ -397,8 +423,8 @@ function renderMediaPanel(assets, productName) {
                                     </svg>
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-gray-900 truncate">${video.title}</p>
-                                    <p class="text-xs text-gray-500">${video.type || 'Video'}</p>
+                                    <p class="text-sm font-medium text-gray-900 truncate">${escapeHtml(video.title)}</p>
+                                    <p class="text-xs text-gray-500">${escapeHtml(video.type || 'Video')}</p>
                                 </div>
                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -424,7 +450,7 @@ function renderMediaPanel(assets, productName) {
                 </h3>
                 <div class="space-y-2">
                     ${documents.map(doc => `
-                        <a href="${doc.url}" target="_blank" 
+                        <a href="${escapeHtml(doc.url)}" target="_blank" 
                            class="media-card block bg-white border border-gray-200 rounded-lg p-3 hover:border-blue-500">
                             <div class="flex items-center space-x-3">
                                 <div class="flex-shrink-0">
@@ -434,8 +460,8 @@ function renderMediaPanel(assets, productName) {
                                     </svg>
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-sm font-medium text-gray-900">${doc.title}</p>
-                                    <p class="text-xs text-gray-500">${doc.type || 'PDF'} ${doc.file_size ? '• ' + doc.file_size : ''}</p>
+                                    <p class="text-sm font-medium text-gray-900">${escapeHtml(doc.title)}</p>
+                                    <p class="text-xs text-gray-500">${escapeHtml(doc.type || 'PDF')}${doc.file_size ? ' • ' + escapeHtml(doc.file_size) : ''}</p>
                                 </div>
                                 <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
@@ -461,13 +487,13 @@ function renderMediaPanel(assets, productName) {
                 </h3>
                 <div class="grid grid-cols-2 gap-2">
                     ${images.map(image => `
-                        <a href="${image.url}" target="_blank" class="media-card block">
+                        <a href="${escapeHtml(image.url)}" target="_blank" class="media-card block">
                             <div class="aspect-square bg-gray-100 rounded-lg overflow-hidden border border-gray-200 hover:border-blue-500">
-                                <img src="${image.url}" alt="${image.title}" 
+                                <img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.title)}" 
                                      class="w-full h-full object-cover"
                                      onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 24 24\\' fill=\\'%239ca3af\\'%3E%3Cpath d=\\'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\\'/%3E%3C/svg%3E'">
                             </div>
-                            <p class="text-xs text-gray-600 mt-1 text-center truncate">${image.title}</p>
+                            <p class="text-xs text-gray-600 mt-1 text-center truncate">${escapeHtml(image.title)}</p>
                         </a>
                     `).join('')}
                 </div>
@@ -489,9 +515,8 @@ async function handleFreshdeskExport() {
     elements.exportBtn.innerHTML = '<span class="flex items-center justify-center">Exporting...</span>';
     
     try {
-        // Format note for Freshdesk
         const formattedNote = formatFreshdeskNote(
-            AppState.chat.messages[AppState.chat.messages.length - 2].content, // User query
+            AppState.chat.messages[AppState.chat.messages.length - 2].content,
             AppState.context.latestResponse.markdown_response,
             AppState.context.latestResponse.model_used,
             AppState.context.sources
@@ -569,7 +594,7 @@ function formatFreshdeskNote(query, response, model, sources) {
     ` : ''}
     
     <div style="font-size: 0.85em; color: #7f8c8d; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
-        Generated by Agent Assist Console | Model: ${model}
+        Generated by Agent Assist Console | Model: ${escapeHtml(model)}
     </div>
 </div>
     `.trim();

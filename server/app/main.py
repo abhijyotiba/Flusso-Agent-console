@@ -169,6 +169,16 @@ else:
 
 
 # Root endpoint
+from fastapi.responses import FileResponse
+
+# Serve favicon.ico from client/icons
+@app.get("/favicon.ico")
+async def favicon():
+    icon_path = Path(__file__).resolve().parent.parent.parent / "client" / "icons" / "favicon.ico"
+    if icon_path.exists():
+        return FileResponse(str(icon_path))
+    return {"detail": "favicon not found"}
+
 @app.get("/api")
 async def root():
     """API root endpoint"""
